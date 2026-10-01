@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Compartir ubicación</title>
+
+    <style>
+
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --ok: #4ade80;
+            --error: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            background: var(--bg);
+            color: var(--text);
+
+            font-family: Arial, sans-serif;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            padding: 20px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 450px;
+
+            background: var(--card);
+
+            border-radius: 16px;
+
+            padding: 30px;
+
+            text-align: center;
+
+            box-shadow: 0 10px 40px rgba(0,0,0,.4);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .estado {
+            margin-top: 25px;
+
+            padding: 18px;
+
+            border-radius: 10px;
+
+            background: rgba(255,255,255,.05);
+        }
+
+        .ok {
+            border: 1px solid var(--ok);
+        }
+
+        .error {
+            border: 1px solid var(--error);
+        }
+
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h1>📍 Compartir ubicación</h1>
+
+    <p>
+        Para continuar, debes permitir que este sitio
+        conozca tu ubicación.
+    </p>
+
+    <div id="estado" class="estado">
+
+        📍 Solicitando permiso de ubicación...
+
+    </div>
+
+</div>
+
+
+<!-- PeerJS -->
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+
+<script>
+
+    /*
+     * ESTE ID DEBE SER EXACTAMENTE EL MISMO
+     * QUE ESTÁ EN observar.html
+     */
+
+    const ID_OBSERVADOR = "observador-ubicacion-cleyver-2026";
+
+
+    const estado =
+        document.getElementById("estado");
+
+
+    /*
+     * Primero creamos nuestra conexión PeerJS.
+     */
+
+    const peer = new Peer();
+
+
+    /*
+     * Cuando PeerJS esté listo,
+     * solicitamos automáticamente
+     * la ubicación.
+     */
+
+    peer.on("open", function(id) {
+
+        console.log("Compartidor conectado:", id);
+
+        solicitarUbicacion();
+
+    });
+
+
+    /*
+     * SOLICITAR UBICACIÓN
+     */
+
+    function solicitarUbicacion() {
+
+        if (!navigator.geolocation) {
+
+            mostrarError(
+                "Tu navegador no soporta geolocalización."
+            );
+
+            return;
+        }
+
+
+        /*
+         * ESTA ES LA PARTE QUE PROVOCA
+         * EL AVISO QUE MOSTRASTE EN LA CAPTURA.
+         */
+
+        navigator.geolocation.getCurrentPosition(
+
+            // ÉXITO
+            function(posicion) {
+
+                console.log("Permiso concedido.");
+
+                const latitud =
+                    posicion.coords.latitude;
+
+                const longitud =
+                    posicion.coords.longitude;
+
+                const precision =
+                    posicion.coords.accuracy;
+
+
+                /*
+                 * Ahora nos conectamos
+                 * con observar.html
+                 */
+
+                conectarConObservador(
+                    latitud,
+                    longitud,
+                    precision
+                );
+
+            },
+
+
+            // ERROR
+            function(error) {
+
+                if (
+                    error.code ===
+                    error.PERMISSION_DENIED
+                ) {
+
+                    mostrarError(
+                        "🚫 No permitiste compartir tu ubicación."
+                    );
+
+                }
+
+                else if (
+                    error.code ===
+                    error.POSITION_UNAVAILABLE
+                ) {
+
+                    mostrarError(
+                        "📡 No se pudo obtener tu ubicación."
+                    );
+
+                }
+
+                else if (
+                    error.code ===
+                    error.TIMEOUT
+                ) {
+
+                    mostrarError(
+                        "⏱️ Se agotó el tiempo de espera."
+                    );
+
+                }
+
+                else {
+
+                    mostrarError(
+                        "❌ Ocurrió un error."
+                    );
+                }
+
+            },
+
+
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+
+        );
+
+    }
+
+
+    /*
+     * CONECTAR CON TU PÁGINA OBSERVADORA
+     */
+
+    function conectarConObservador(
+        latitud,
+        longitud,
+        precision
+    ) {
+
+        estado.className = "estado";
+
+        estado.innerHTML =
+            "📡 Enviando ubicación...";
+
+
+        const conexion =
+            peer.connect(ID_OBSERVADOR, {
+                reliable: true
+            });
+
+
+        /*
+         * Cuando la conexión esté abierta,
+         * enviamos los datos.
+         */
+
+        conexion.on("open", function() {
+
+            console.log(
+                "Conectado con observador."
+            );
+
+
+            conexion.send({
+
+                tipo: "ubicacion",
+
+                latitud: latitud,
+
+                longitud: longitud,
+
+                precision: precision
+
+            });
+
+
+            /*
+             * No mostramos los datos
+             * a la persona.
+             */
+
+            estado.className =
+                "estado ok";
+
+            estado.innerHTML =
+                "✅ Ubicación compartida correctamente.";
+
+        });
+
+
+        conexion.on("error", function(error) {
+
+            console.error(error);
+
+            mostrarError(
+                "❌ No se pudo enviar la ubicación."
+            );
+
+        });
+
+    }
+
+
+    /*
+     * MOSTRAR ERROR
+     */
+
+    function mostrarError(mensaje) {
+
+        estado.className =
+            "estado error";
+
+        estado.innerHTML =
+            mensaje;
+
+    }
+
+
+    peer.on("error", function(error) {
+
+        console.error(
+            "Error de conexión:",
+            error
+        );
+
+        mostrarError(
+            "❌ No se pudo establecer la conexión."
+        );
+
+    });
+
+</script>
+
+</body>
+</html>

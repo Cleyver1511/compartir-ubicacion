@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Observar ubicación</title>
+
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --ok: #4ade80;
+            --error: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            background: var(--bg);
+            color: var(--text);
+
+            font-family: Arial, sans-serif;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            padding: 20px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 500px;
+
+            background: var(--card);
+
+            border-radius: 16px;
+
+            padding: 30px;
+
+            box-shadow: 0 10px 40px rgba(0,0,0,.4);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .status {
+            padding: 16px;
+            margin-top: 20px;
+
+            border-radius: 10px;
+
+            background: rgba(255,255,255,.05);
+
+            border: 1px solid var(--accent);
+        }
+
+        .success {
+            border-color: var(--ok);
+        }
+
+        .error {
+            border-color: var(--error);
+        }
+
+        .dato {
+            display: flex;
+            justify-content: space-between;
+
+            gap: 20px;
+
+            padding: 12px 0;
+
+            border-bottom: 1px solid rgba(255,255,255,.1);
+        }
+
+        .dato span:first-child {
+            color: var(--muted);
+        }
+
+        .maps {
+            display: block;
+
+            margin-top: 20px;
+
+            padding: 14px;
+
+            background: var(--accent);
+
+            color: #0f172a;
+
+            text-decoration: none;
+
+            text-align: center;
+
+            border-radius: 10px;
+
+            font-weight: bold;
+        }
+
+        .conexion {
+            font-size: .9rem;
+            color: var(--muted);
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h1>📍 Observar ubicación</h1>
+
+    <p>
+        Esta página recibe la ubicación cuando una persona
+        acepta compartirla.
+    </p>
+
+    <!-- Estado inicial -->
+    <div id="estado" class="status">
+        ⏳ Esperando que alguien comparta su ubicación...
+    </div>
+
+    <!-- Información recibida -->
+    <div id="datos" style="display:none;">
+
+        <div class="status success">
+            <strong>✅ Ubicación recibida</strong>
+        </div>
+
+        <div class="dato">
+            <span>Permiso</span>
+            <span>Concedido</span>
+        </div>
+
+        <div class="dato">
+            <span>Latitud</span>
+            <span id="latitud">---</span>
+        </div>
+
+        <div class="dato">
+            <span>Longitud</span>
+            <span id="longitud">---</span>
+        </div>
+
+        <div class="dato">
+            <span>Precisión</span>
+            <span id="precision">---</span>
+        </div>
+
+        <a
+            id="googleMaps"
+            class="maps"
+            href="#"
+            target="_blank"
+            rel="noopener">
+            🗺️ Ver en Google Maps
+        </a>
+
+    </div>
+
+    <div id="conexion" class="conexion">
+        Conectando...
+    </div>
+
+</div>
+
+
+<!-- PeerJS -->
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+
+<script>
+
+    /*
+     * ESTE ES EL ID DE TU PÁGINA OBSERVADORA.
+     *
+     * compartir.html utilizará este mismo ID
+     * para conectarse contigo.
+     */
+
+    const ID_OBSERVADOR = "observador-ubicacion-cleyver-2026";
+
+
+    // Crear nuestro Peer
+    const peer = new Peer(ID_OBSERVADOR);
+
+
+    const estado = document.getElementById("estado");
+    const datos = document.getElementById("datos");
+    const conexionTexto = document.getElementById("conexion");
+
+
+    // Cuando estamos conectados al servidor de PeerJS
+    peer.on("open", function(id) {
+
+        console.log("Observador conectado:", id);
+
+        conexionTexto.textContent =
+            "🟢 Listo. Esperando una ubicación...";
+    });
+
+
+    /*
+     * AQUÍ RECIBIMOS LA CONEXIÓN
+     * DESDE compartir.html
+     */
+
+    peer.on("connection", function(conn) {
+
+        console.log("Persona conectada");
+
+        conexionTexto.textContent =
+            "🟢 Persona conectada";
+
+
+        // Cuando la conexión esté lista
+        conn.on("open", function() {
+
+            console.log("Conexión establecida");
+
+            conexionTexto.textContent =
+                "🟢 Conexión establecida";
+        });
+
+
+        /*
+         * AQUÍ LLEGAN LOS DATOS
+         */
+
+        conn.on("data", function(data) {
+
+            console.log("Datos recibidos:", data);
+
+
+            if (data.tipo === "ubicacion") {
+
+                mostrarUbicacion(
+                    data.latitud,
+                    data.longitud,
+                    data.precision
+                );
+
+            }
+
+        });
+
+
+        conn.on("close", function() {
+
+            conexionTexto.textContent =
+                "⚪ La persona cerró la conexión.";
+        });
+
+
+        conn.on("error", function(error) {
+
+            console.error(error);
+
+            conexionTexto.textContent =
+                "❌ Error en la conexión.";
+        });
+
+    });
+
+
+    /*
+     * MOSTRAR LA INFORMACIÓN RECIBIDA
+     */
+
+    function mostrarUbicacion(latitud, longitud, precision) {
+
+        estado.style.display = "none";
+
+        datos.style.display = "block";
+
+
+        document.getElementById("latitud").textContent =
+            latitud.toFixed(6);
+
+
+        document.getElementById("longitud").textContent =
+            longitud.toFixed(6);
+
+
+        document.getElementById("precision").textContent =
+            "±" + Math.round(precision) + " metros";
+
+
+        const urlGoogleMaps =
+            `https://www.google.com/maps?q=${latitud},${longitud}`;
+
+
+        document.getElementById("googleMaps").href =
+            urlGoogleMaps;
+
+
+        conexionTexto.textContent =
+            "📍 Ubicación recibida correctamente.";
+    }
+
+
+    // Error de PeerJS
+    peer.on("error", function(error) {
+
+        console.error("PeerJS:", error);
+
+        estado.className = "status error";
+
+        estado.innerHTML =
+            "❌ No se pudo establecer la conexión.";
+
+        conexionTexto.textContent =
+            "Revisa que la página observadora esté abierta.";
+    });
+
+</script>
+
+</body>
+</html>
